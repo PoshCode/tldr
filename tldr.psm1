@@ -61,6 +61,18 @@ function Get-ShortHelp {
         $Syntax = $Help.Syntax | Out-String -stream -width 1e4 | Where-Object { $_ }
     }
 
+    if(!$HelpFile -and $Help -and !$Regenerate) {
+        $Module = $Help.ModuleName
+        if($Module) {
+            $local:StoragePath = Join-Path $StoragePath $Module
+            if(Test-Path $local:StoragePath) {
+                Remove-Variable StoragePath -Scope Local
+            }
+        }
+        $Name = $Help.Name
+        $HelpFile = Get-ChildItem $StoragePath -Recurse -Filter "${Name}.md" | Convert-Path
+    }
+
     if($Regenerate -or !$HelpFile) {
         if($Help) {
             $ErrorActionPreference = "Stop"
@@ -82,7 +94,10 @@ function Get-ShortHelp {
             # I'm slightly torn about listing the syntax blocks here, because I don't know how many is useful
             # For example, Where-Object and ForEach-Object have, e.g. 35 combinations
             # So, we will list just the first one at the top:
-            $Index = [array]::IndexOf( $Command.ParameterSets.Name,  $Command.DefaultParameterSet )
+            $Index = 0
+            if($Command.DefaultParameterSet) {
+                $Index = [array]::IndexOf( $Command.ParameterSets.Name,  $Command.DefaultParameterSet )
+            }
 
             $prefix = "PS C:\\>" # Stupid prefix is sometimes in the code, sometimes not
             foreach($example in $Help.Examples.example) {
@@ -107,6 +122,13 @@ function Get-ShortHelp {
         }
     }
 
+    Write-Help $HelpFile $Syntax
+
+}
+
+
+filter Write-Help {
+    param($HelpFile, $Syntax)
     GetColors
     switch -regex (Get-Content $HelpFile) {
         '^\s*##\s*' {
@@ -115,13 +137,13 @@ function Get-ShortHelp {
             # Otherwise, continue...
             $Name = $_ -replace '^#+\s*(.*)','$1'
             Write-Host $Name @NameColors
-            Write-Host ("-" * $Name.Length) @NameColors
+            # Write-Host ("-" * $Name.Length) @NameColors
             continue
         }
         '^\s*#\s*' { 
             $Name = $_ -replace '^#+\s*(.*)','$1'
             Write-Host $Name @NameColors
-            Write-Host ("=" * $Name.Length) @NameColors
+            # Write-Host ("=" * $Name.Length) @NameColors
         }
         
         '^\s*>\s*' { Write-Host ($_ -replace '^\s*>\s*') @SynopsisColors }
@@ -135,8 +157,8 @@ function Get-ShortHelp {
         default { Write-Host }
     }
     if($Syntax) {
-        Write-Host "Full Syntax" @NameColors
-        Write-Host "-----------" @NameColors
+        Write-Host "Full Syntax:" @NameColors
+        # Write-Host "-----------" @NameColors
         Write-Host
         $Syntax | Write-Code -VariablePattern "(?=\<.*?\>)|(?<=\<.*?\>)"
     }
@@ -150,7 +172,7 @@ filter Write-Code {
 
         $VariablePattern = "(?=\$\{.*?\})|(?<=\$\{.*?\})"
     )
-    $Code = $Code -replace '^\s*`?(.*?)`?', '    $1'
+    $Code = $Code -replace '^\s*`?(.*?)`?$', '    $1'
     switch -regex ($Code -split $VariablePattern) {
         $VariablePattern { Write-Host $_ @VariableColors -NoNewLine}
         default { Write-Host $_ @CodeColors  -NoNewLine}
