@@ -18,7 +18,7 @@
     Copyright = '(c) 2015 Joel Bennett. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description = 'Simplified and community-driven man pages'
+    Description = 'Simplified, community-driven, example-centric help pages for PowerShell'
 
     # Minimum version of the Windows PowerShell engine required by this module
     # PowerShellVersion = ''
