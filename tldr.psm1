@@ -32,20 +32,57 @@ function Get-ShortHelp {
         # If set, generates a new tldr file from the help
         [switch]$Regenerate
     )
-    if(!$StoragePath) {
-        $Script:StoragePath = GetStoragePath
-    }
+    if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
 
-    # Find the command ...
+    # Find the command if it's available on the local system
     $FullName = $Name
     $Command = Get-Command $Name -ErrorAction Ignore
 
-    # Find the module name if there is one
-    $Module, $Name = $Name -split "[\\/](?=[^\\/]+$)",2
-    if(!$Name) {
-        $Name = $Module
-        $Module = $Null
+    # Otherwise, normalize the name/module
+    if($Command) {
+        $Module = $Command.ModuleName
+    } else {
+        # Find the module name if there is one
+        $Module, $Name = $Name -split "[\\/](?=[^\\/]+$)",2
+        if(!$Name) {
+            $Name = $Module
+            $Module = $Null
+        }
     }
+
+    # TODO: if the online version is newer, fetch that one
+
+    $HelpFile = Find-TldrDocument $Name $Module
+
+    # Use syntax from the actual command help, if available
+    if($Command) {
+        $Help = Get-Help $Command
+        $Syntax = $Help.Syntax | Out-String -stream -width 1e4 | Where-Object { $_ }
+    }
+
+    # Error conditions
+    if($Regenerate -or !$HelpFile) {
+        if($Help) {
+            Write-Warning "tldr page not found for $Name. Generating from help"
+            $HelpFile = New-TldrDocument $Command
+        }
+        else {
+            Write-Error "No help or command found for $FullName"
+            return
+        }
+    }
+    Write-Help $HelpFile $Syntax
+}
+
+function Find-TldrDocument {
+    param(
+        # The name of a command to fetch some examples for
+        [Alias("Command")]
+        [string]$Name = "*",
+
+        # A Module name to filter the results
+        [string]$Module
+    )
 
     # And append that to the search path if it exists
     if($Module) {
@@ -55,79 +92,61 @@ function Get-ShortHelp {
         }
     }
 
-    $HelpFile = Get-ChildItem $StoragePath -Recurse -Filter "${Name}.md" | Convert-Path
-    if($Command) {
-        $Help = Get-Help $Command
-        $Syntax = $Help.Syntax | Out-String -stream -width 1e4 | Where-Object { $_ }
-    }
-
-    if(!$HelpFile -and $Help -and !$Regenerate) {
-        $Module = $Help.ModuleName
-        if($Module) {
-            $local:StoragePath = Join-Path $StoragePath $Module
-            if(Test-Path $local:StoragePath) {
-                Remove-Variable StoragePath -Scope Local
-            }
-        }
-        $Name = $Help.Name
-        $HelpFile = Get-ChildItem $StoragePath -Recurse -Filter "${Name}.md" | Convert-Path
-    }
-
-    if($Regenerate -or !$HelpFile) {
-        if($Help) {
-            $ErrorActionPreference = "Stop"
-            Write-Warning "tldr page not found for $Name. Generating from help"
-            $Module = $Help.ModuleName
-            $Name = $Help.Name
-
-            $local:StoragePath = Join-Path $StoragePath $Module
-            $null = mkdir $StoragePath -force
-            $HelpFile = Join-Path $StoragePath "${Name}.md"
-
-            $Synopsis = $Help.Synopsis
-            
-            Write-Progress "Generating HelpFile:" "$HelpFile"
-            Write-Warning "You should consider editing the generated file to match the Contribution Guidelines and submitting it for others to use.`nFILE PATH:`n$HelpFile`n    See also: Get-Help about_tldr`n`n"
-
-            "# $Name`n" | Out-File $HelpFile
-            "> $Synopsis`n" | Out-File $HelpFile -Append
-            # I'm slightly torn about listing the syntax blocks here, because I don't know how many is useful
-            # For example, Where-Object and ForEach-Object have, e.g. 35 combinations
-            # So, we will list just the first one at the top:
-            $Index = 0
-            if($Command.DefaultParameterSet) {
-                $Index = [array]::IndexOf( $Command.ParameterSets.Name,  $Command.DefaultParameterSet )
-            }
-
-            $prefix = "PS C:\\>" # Stupid prefix is sometimes in the code, sometimes not
-            foreach($example in $Help.Examples.example) {
-                $code = $example.code -split "[\r\n]+"
-                # We always want the first line, *maybe* other lines with the prompt prefix
-                $code = @($code[0]) + @($code[1..1e3] -match $prefix) -replace $prefix
-
-                # We really aren't interested in your long-winded explanations.
-                $remarks = $example.remarks[0].Text
-                "- $remarks`n" | Out-File $HelpFile -Append
-                "``$code```n" | Out-File $HelpFile -Append
-            }
-
-            "## Full Syntax`n" | Out-File $HelpFile -Append
-            foreach($syn in $syntax) {
-                "``$syn```n" | Out-File $HelpFile -Append
-            }
-        }
-        else {
-            Write-Error "No help or command found for $FullName"
-            return
-        }
-    }
-
-    Write-Help $HelpFile $Syntax
-
+    Get-ChildItem $StoragePath -Recurse -Filter "${Name}.md" | Convert-Path
 }
 
+function New-TldrDocument {
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline,ValueFromPipelineByPropertyName)]
+        [System.Management.Automation.CommandInfo]$CommandInfo
+    )
+    begin {
+        if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
 
-filter Write-Help {
+        $prefix = "PS C:\\>" # Stupid prefix is sometimes in the code, sometimes not        
+    }
+    process {
+        $ErrorActionPreference = "Stop"
+        $Help = Get-Help $CommandInfo
+
+        $Module = $Help.ModuleName
+        $Name = $Help.Name
+        $Synopsis = $Help.Synopsis
+        $Syntax = $Help.Syntax | Out-String -stream -width 1e4 | Where-Object { $_ }
+
+        $local:StoragePath = Join-Path $StoragePath $Module
+        $null = mkdir $StoragePath -force
+        $HelpFile = Join-Path $StoragePath "${Name}.md"
+
+        Write-Progress "Generating HelpFile:" "$HelpFile"
+        Write-Warning "You should edit the generated file to match the contribution guidelines before submitting it for others to use.`nFILE PATH:`n$HelpFile`n    See also: Get-Help about_tldr`n`n"
+
+        "# $Name`n" | Out-File $HelpFile
+        "> $Synopsis`n" | Out-File $HelpFile -Append
+
+        foreach($example in $Help.Examples.example) {
+            $code = $example.code -split "[\r\n]+"
+            # We always want the first line, *maybe* other lines with the prompt prefix
+            $code = @($code[0]) + @($code[1..1e3] -match $prefix) -replace $prefix
+
+            # We really aren't interested in those long-winded explanations, but keep the first paragraph
+            $remarks = $example.remarks[0].Text
+            "- $remarks`n" | Out-File $HelpFile -Append
+            "``$code```n" | Out-File $HelpFile -Append
+        }
+
+        "`n## Full Syntax`n" | Out-File $HelpFile -Append
+        foreach($syn in $syntax) {
+            "``$syn```n" | Out-File $HelpFile -Append
+        }
+
+        Convert-Path $HelpFile
+    }
+}
+
+function Write-Help {
+    [CmdletBinding()]
     param($HelpFile, $Syntax)
     GetColors
     switch -regex (Get-Content $HelpFile) {
@@ -166,6 +185,7 @@ filter Write-Help {
 
 
 filter Write-Code {
+    [CmdletBinding()]
     param(
         [Parameter(ValueFromPipeline)]
         $Code,
