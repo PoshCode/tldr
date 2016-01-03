@@ -71,16 +71,19 @@ function Get-ShortHelp {
         [switch]$Regenerate
     )
     if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
+    $Command = Resolve-Command @PSBoundParameters
 
     # Find the command if it's available on the local system
     $FullName = $Name    
-    $Command = Get-Command $Name -ErrorAction Ignore
 
-    # Otherwise, normalize the name/module
     if($Command) {
+        $Name = $Command.Name
         $Module = $Command.ModuleName
     } else {
-        # Find the module name if there is one
+        # If we didn't find the command, we can still show help
+        # We support two syntaxes, because Get-Command does:
+        # Get-ShortHelp Get-Service -Module Microsoft.PowerShell.Management
+        # Get-ShortHelp Microsoft.PowerShell.Management\Get-Service
         $Module, $Name = $Name -split "[\\/](?=[^\\/]+$)",2
         if(!$Name) {
             $Name = $Module
@@ -110,6 +113,24 @@ function Get-ShortHelp {
         }
     }
     Write-Help $HelpFile $Syntax
+}
+
+function Resolve-Command {
+    [OutputType([System.Management.Automation.CommandInfo])]
+    [CmdletBinding()]
+    param(
+        # The name of a command to fetch some examples for
+        [Alias("Command")]
+        [string]$Name = "*",
+
+        # A Module name to filter the results
+        [string]$Module        
+    )
+    $Command = Get-Command @PSBoundParameters -Type "Alias", "Function", "Filter", "Cmdlet", "ExternalScript", "Script", "Workflow", "Configuration"
+    if($Command -is [System.Management.Automation.AliasInfo]) {
+        $Command = Get-Command $Command.Definition
+    }
+    return $Command
 }
 
 function Find-TldrDocument {
