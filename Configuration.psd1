@@ -6,4 +6,5 @@
         Code = @{ Foreground = "Cyan" }
         Variables = @{ Foreground = "DarkCyan" }
     }
+    NoCache = $false
 }

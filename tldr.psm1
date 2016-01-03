@@ -8,6 +8,8 @@ function ImportConfiguration {
     #.Synopsis
     #   Read the colors from the configuration file
     $Config = Configuration\Import-Configuration
+
+    [bool]$script:NoCache = $Config.NoCache
     $script:NameColors = $Config.Colors.Name
     $script:SynopsisColors = $Config.Colors.Synopsis
     $script:DescriptionColors = $Config.Colors.Description
@@ -21,6 +23,7 @@ function Set-TldrConfiguration {
     #.Description
     #   Imports your current configuration, changes the specified options, and stores them
     param(
+        [bool]$NoCache,
         [hashtable]$NameColors,
         [hashtable]$SynopsisColors,
         [hashtable]$DescriptionColors,
@@ -28,6 +31,11 @@ function Set-TldrConfiguration {
         [hashtable]$VariableColors
     )
     $Config = Configuration\Import-Configuration
+
+    if($PSBoundParameters.ContainsKey("NoCache")) {
+        $Config.NoCache = $NoCache
+        $null = $PSBoundParameters.Remove("NoCache")
+    }
 
     # Enumerate all those color values
     foreach($key in $PSBoundParameters.Keys) {
@@ -45,6 +53,7 @@ function Set-TldrConfiguration {
     $Config | Configuration\Export-Configuration
 
     # Update the script-scope variables without re-reading the config (again)
+    [bool]$script:NoCache = $Config.NoCache
     $script:NameColors = $Config.Colors.Name
     $script:SynopsisColors = $Config.Colors.Synopsis
     $script:DescriptionColors = $Config.Colors.Description
@@ -62,15 +71,24 @@ function Get-ShortHelp {
     param(
         # The name of a command to fetch some examples for
         [Alias("Command")]
+        [Parameter(Position=0)]
         [string]$Name = "*",
 
-        # A Module name to filter the results
+        # A Module name (to make the results more specific)
         [string]$Module,
+
+        # Show the web version of the file
+        [Switch]$Online,
+
+        # Don't consider (or create new) local copies
+        # You can set the default for this option in the configuration using Set-TldrConfiguration
+        [Switch]$NoCache = $script:NoCache,
 
         # If set, generates a new tldr file from the help
         [switch]$Regenerate
     )
     if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
+    $null = $PSBoundParameters.Remove("Regenerate")
     $Command = Resolve-Command @PSBoundParameters
 
     # Find the command if it's available on the local system
@@ -242,7 +260,6 @@ function Write-Help {
     }
 }
 
-
 filter Write-Code {
     [CmdletBinding()]
     param(
@@ -258,6 +275,8 @@ filter Write-Code {
     }
     Write-Host "`n"
 }
+
+
 
 
 Set-Alias tldr Get-ShortHelp
