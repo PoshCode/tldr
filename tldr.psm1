@@ -4,7 +4,9 @@ function GetStoragePath {
     Configuration\Get-StoragePath
 }
 
-function GetColors {
+function ImportConfiguration {
+    #.Synopsis
+    #   Read the colors from the configuration file
     $Config = Configuration\Import-Configuration
     $script:NameColors = $Config.Colors.Name
     $script:SynopsisColors = $Config.Colors.Synopsis
@@ -13,6 +15,42 @@ function GetColors {
     $script:VariableColors = $Config.Colors.Variables
 }
 
+function Set-TldrConfiguration {
+    #.Synopsis
+    #   Change options in the configuration files
+    #.Description
+    #   Imports your current configuration, changes the specified options, and stores them
+    param(
+        [hashtable]$NameColors,
+        [hashtable]$SynopsisColors,
+        [hashtable]$DescriptionColors,
+        [hashtable]$CodeColors,
+        [hashtable]$VariableColors
+    )
+    $Config = Configuration\Import-Configuration
+
+    # Enumerate all those color values
+    foreach($key in $PSBoundParameters.Keys) {
+        foreach($color in $PSBoundParameters[$key].Keys) {
+            if($color -notin "Foreground","Background") {
+                throw "Invalid key '$Color' in ${key}: should be 'Foreground' or 'Background'"
+            }
+            if(!($PSBoundParameters[$key][$color] -as [ConsoleColor])) {
+                throw "Invalid value for $key.$color, must be a ConsoleColor"
+            }
+            $Config.Colors[($key -replace "Colors$")] = $PSBoundParameters[$key]
+        }
+    }
+
+    $Config | Configuration\Export-Configuration
+
+    # Update the script-scope variables without re-reading the config (again)
+    $script:NameColors = $Config.Colors.Name
+    $script:SynopsisColors = $Config.Colors.Synopsis
+    $script:DescriptionColors = $Config.Colors.Description
+    $script:CodeColors = $Config.Colors.Code
+    $script:VariableColors = $Config.Colors.Variables
+}
 
 function Get-ShortHelp {
     #.Synopsis
@@ -35,7 +73,7 @@ function Get-ShortHelp {
     if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
 
     # Find the command if it's available on the local system
-    $FullName = $Name
+    $FullName = $Name    
     $Command = Get-Command $Name -ErrorAction Ignore
 
     # Otherwise, normalize the name/module
@@ -50,8 +88,8 @@ function Get-ShortHelp {
         }
     }
 
-    # TODO: if the online version is newer, fetch that one
-
+    # TODO: if the online version is (newer?), fetch that one
+    
     $HelpFile = Find-TldrDocument $Name $Module
 
     # Use syntax from the actual command help, if available
@@ -148,7 +186,7 @@ function New-TldrDocument {
 function Write-Help {
     [CmdletBinding()]
     param($HelpFile, $Syntax)
-    GetColors
+    ImportConfiguration
     switch -regex (Get-Content $HelpFile) {
         '^\s*##\s*' {
             # If we have generated syntax, we'll use that instead:

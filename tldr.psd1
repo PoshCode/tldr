@@ -57,7 +57,7 @@
     # NestedModules = @()
 
     # Functions to export from this module
-    FunctionsToExport = 'Get-ShortHelp'
+    FunctionsToExport = 'Get-ShortHelp','Set-TldrConfiguration'
 
     # Cmdlets to export from this module
     # CmdletsToExport = '*'
