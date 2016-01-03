@@ -1,5 +1,7 @@
 #requires -Module @{ModuleName="Configuration"; ModuleVersion="0.3"}
 
+$PagesUrl = "https://raw.github.com/PoshCode/tldr/master/pages/"
+
 function GetStoragePath {
     Configuration\Get-StoragePath
 }
@@ -88,6 +90,7 @@ function Get-ShortHelp {
         [switch]$Regenerate
     )
     if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
+    if(!$HelpCache){ $Script:HelpCache = Invoke-RestMethod ${PagesUrl}index.json }
     $null = $PSBoundParameters.Remove("Regenerate")
     $Command = Resolve-Command @PSBoundParameters
 
@@ -110,8 +113,21 @@ function Get-ShortHelp {
     }
 
     # TODO: if the online version is (newer?), fetch that one
-    
-    $HelpFile = Find-TldrDocument $Name $Module
+    $Best = $HelpCache | Where { $_.Name -eq $Name -and ($Module -eq $Null -or $Module -eq $_.Module)}
+    if(!$NoCache) {
+        if($HelpFile = Find-TldrDocument $Name $Module) {
+            $FileInfo = Get-Item $HelpFile
+            if($NoCache -or $HelpFile.LastWriteTime -lt $Best.Updated) {
+                Invoke-WebRequest "$PagesUrl\$($Best.Module)\$($Best.Name).md" -OutFile $HelpFile
+            }
+        }
+    } 
+
+    if(($NoCache -or !$HelpFile) -and $Best) {
+        $null = mkdir (join-Path $Script:StoragePath $Best.Module) -force
+        $HelpFile = Join-Path $Script:StoragePath $($Best.Module)\$($Best.Name).md
+        Invoke-WebRequest "$PagesUrl\$($Best.Module)\$($Best.Name).md" -OutFile $HelpFile
+    }
 
     # Use syntax from the actual command help, if available
     if($Command) {
