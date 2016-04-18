@@ -1,20 +1,34 @@
 # Import-Configuration
 
-> Import layered configuration files for a module.
+## Synopsis
 
-- Load configuration data within your own module
+Import layered configuration files for a module.
 
-`${Configuration} = Import-Configuration`
 
-- Load configuration data for a specified module
+## Examples
 
-`${Configuration} = Get-Module ${ModuleName} | Import-Configuration`
+### EXAMPLE 1
+Load configuration data within your own module
 
-## Full Syntax
+```powershell
+${Configuration} = Import-Configuration
+```
 
-`Import-Configuration [-CallStack <CallStackFrame[]>] [-Version <Version>] [<CommonParameters>]`
+### EXAMPLE 2
+Load configuration data for a specified module
 
-`Import-Configuration [-Module <PSModuleInfo>] [-Version <Version>] [<CommonParameters>]`
+```powershell
+${Configuration} = Get-Module ${ModuleName} | Import-Configuration
+```
 
-`Import-Configuration -CompanyName <String> -Name <String> [-DefaultPath <String>] [-Version <Version>] [<CommonParameters>]`
 
+
+## Syntax
+
+```powershell
+Import-Configuration [-CallStack <CallStackFrame[]>] [-Version <Version>] [<CommonParameters>]
+
+Import-Configuration [-Module <PSModuleInfo>] [-Version <Version>] [<CommonParameters>]
+
+Import-Configuration -CompanyName <String> -Name <String> [-DefaultPath <String>] [-Version <Version>] [<CommonParameters>]
+```

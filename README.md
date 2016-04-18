@@ -1,6 +1,6 @@
 # tldr
 
-The PoshCode *tldr* module is a collection of simplified and community-driven example pages.
+The PoshCode *tldr* module is a collection of simplified and community-driven example pages to help you quickly the the gist of commands.
 
 ## What does tldr mean?
 
@@ -10,34 +10,29 @@ Read more in the [TLDR article on Wikipedia](https://en.wikipedia.org/wiki/TL;DR
 
 ## What is tldr?
 
-Found a new module? Or just a little rusty on one?
-Or maybe you can't always remember the syntax for `Set-ACL` or `Get-OdbcDsn`?
+It's a help module for people like me...
 
-Maybe it doesn't help that the parameter explanations in `Get-Help Set-Acl -Full` start with this:
+When I look at command help, I usually only care about two things: 
 
-```
--AclObject <Object>
-    Specifies an ACL with the desired property values. Set-Acl changes the ACL of item specified by the Path or InputObject
-    parameter to match the values in the specified security object.
+1. The syntax
+2. Some examples
 
-    You can save the output of a Get-Acl command in a variable and then use the AclObject parameter to pass the variable, or type
-    a Get-Acl command.
+I'm always frustrated when a command has a lot of description text, causing the syntax block to scroll right off the top of the page in PowerShell.  I'm also frustrated when there are pages and pages of examples that don't actually do anything useful (like, how could there be 74 lines of examples for Set-ACL without a single example that doesn't just copy the ACL from another file?).
 
-    Required?                    true
-    Position?                    2
-    Default value
-    Accept pipeline input?       true (ByValue)
-    Accept wildcard characters?  false
-```
-
-Or maybe you're just frustrated that in 74 lines of the `Get-Help Set-Acl -Examples` there's not a single example that doesn't just copy the ACL from one file to another.
-
-I figured people like me would prefer simple syntax blocks and "show me common usage" help pages. How about something like this:
+You are like me if you would prefer simple syntax blocks and "show me common usage" in your help. Something like this:
 
 ![tldr screenshot](http://raw.github.com/poshcode/tldr/gh-pages/images/screenshot.png)
 
-So, this module and repository is an ever-growing collection of examples
-for the most common PowerShell commands, and some code to generate starter files from the help documentation already available for the command.
+Or maybe you're just frustrated that in 74 lines of the `Get-Help Set-Acl -Examples` there's not a single example that doesn't just copy the ACL from one file to another.
+
+This module and repository is an ever-growing collection of high-quality real-world examples for the most common PowerShell commands, and some code to generate starter files from the help documentation already available with your commands.
+
+* Just found a new module and want a quick overview? 
+* A little rusty on a command?
+* Can't remember how to pass that one parameter?
+* Can't remember the syntax for commands you only use once in a blue moon?
+
+### `tldr` is for you.
 
 ## Antecedents
 

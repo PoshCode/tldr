@@ -6,15 +6,16 @@ Contribution are very welcome! All of our `tldr` pages are written in Markdown a
 
 ## Guidelines
 
-Note that `tldr` is focused on concrete examples.
+Note that `tldr` is focused on concrete, real-world examples.
 Here's a few guidelines to get started:
 
 1. Focus on the 5 or 6 most common usages. It's OK if the page doesn't cover everything; that's what `Get-Help` is for.
 2. Introduce parameters gradually, starting with the simplest commands and using progressively more complex examples.
 3. Use short but descriptive variable names for the values, e.g. `$SourceFile` or `$Credentials`.
-4. Be specific to the command you're writing examples for. Avoid explaining general PowerShell concepts that could apply to any command -- we don't need examples that show how to sort, filter, or format the results!
-5. When in doubt, keep in mind most readers are IT professionals, focus on the usefulness of the command, not teaching PowerShell.
-6. Remember to keep descriptions **very** short so they don't wrap. Just explain _what_ the example does, don't explain how -- that _should_ be obvious.
+4. Do not include output in your examples. These should just be command lines.
+5. Be specific to the command you're writing examples for. Avoid explaining general PowerShell concepts that could apply to any command -- we don't need examples that show how to sort, filter, or format the results!
+6. When in doubt, keep in mind most readers are IT professionals, focus on the usefulness of the command, not teaching PowerShell.
+7. Remember to keep descriptions **very** short so they don't wrap. Just explain _what_ the example does, don't explain how -- that _should_ be obvious.
  
 The best way to be consistent is to have a look at a few existing pages :)
 
@@ -28,34 +29,44 @@ You will need to carefully edit the pages to get something useful, and drastical
 
 ## Markdown format
 
-The format of each page should match the following:
+We're borrowing the [platyPS markdown schema](https://github.com/PowerShell/platyPS/blob/master/platyPS.schema.md), although we don't generally care about all of the things in help, we want to collaborate on a single format.  For `tldr`, the only parts that matter are as follows:
 
-```posh
-# command-name
 
-> Synopsis (from the command help?)
-> Maximum of 1 or 2 lines
+   ```posh
+   # command-name
 
-- example description
+   ## Synopsis
+   The command synopsis. Maximum 1 or 2 lines
 
-`Verb-Noun -Switch1 -Switch2 -param1 ${ParameterValue}`
+   ## Examples
 
-- example description
+   ### -- EXAMPLE 1 -- 
+   A short description of the example
 
-`Verb-Noun -Switch1 -Switch3`
+   ```powershell
+   example code here
+   ```
 
-## Full Syntax
+   ### -- EXAMPLE 2 -- 
+   A short description of this example
 
-`Verb-Noun [-Switch1] [-Switch2] [[-Param1] <String>]`
-`Verb-Noun [-Switch1] [-Switch3]`
+   ```powershell
+   example code here
+   ```
 
-```
+   ## Syntax
 
-User-provided values should use the `${Variable}` syntax (with the curly braces) to allow clients to highlight them. For example: `Compress-Archive -Path ${FileList} -Destination ${OutputFolder}`
+   ```
+   `Verb-Noun [-Switch1] [-Switch2] [[-Param1] <String>]`
+   `Verb-Noun [-Switch1] [-Switch3]`
+
+   ```
+
+We recommend that user-provided values in examples use the `${Variable}` syntax for parameter values (with the curly braces) to allow clients to properly highlight them. For example: `Compress-Archive -Path ${FileList} -Destination ${OutputFolder}`
 
 One of the reasons for this format is that it's well suited for command-line clients that need to extract a single description and example.
 
-Note that the final `## Full Syntax` blocks can be missing, but should not be incomplete -- that is, you may leave off the full syntax (for commands that are available on the user's machine, we can generate that), but if you do include it, please include all the parameter sets just as PowerShell would output them (this will be used if the command is not available on the user's box).
+Note that the final `## Syntax` block can be missing, but should not be incomplete -- that is, you may leave off the full syntax (for commands that are available on the user's machine, we can generate that), but if you do include it, please include all the parameter sets just as PowerShell would output them from `Get-Command -Syntax` (this will be used if the command is not available on the user's box).
 
 ## Submitting a pull request
 

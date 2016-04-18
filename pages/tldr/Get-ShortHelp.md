@@ -1,16 +1,27 @@
 # Get-ShortHelp
 
-> Get short, example-based help and command-line syntax for a command
+## Synopsis
+Get short, example-based help and command-line syntax for a command
 
-- Invoke Get-ShortHelp (via it's standard alias) on itself
+## Examples
 
-`tldr tldr`
+### Example 1
+Invoke Get-ShortHelp (via it's standard alias) on itself
 
-- Force re-generation of a tldr file from the command's standard help
+```powershell
+tldr tldr
+```
 
-`tldr ${CommandName} -Regenerate`
+### Example 2
+Force re-generation of a tldr file from the command's standard help
 
-## Full Syntax
+```powershell
+tldr ${CommandName} -Regenerate
+```
 
-`Get-ShortHelp [[-Name] <String>] [[-Module] <String>] [-Regenerate] [<CommonParameters>]`
+## Syntax
+
+```powershell
+Get-ShortHelp [[-Name] <String>] [[-Module] <String>] [-Regenerate] [<CommonParameters>]
+```
 

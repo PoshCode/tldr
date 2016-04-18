@@ -3,7 +3,7 @@
     RootModule = 'tldr.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.0'
+    ModuleVersion = '2.0'
 
     # ID used to uniquely identify this module
     GUID = 'e345813b-77db-4fbe-ae0d-fc2ed6ef6cf3'
@@ -93,7 +93,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            # ReleaseNotes = ''
+            ReleaseNotes = 'Using platyPS schema (2.0) for markdown'
         } # End of PSData hashtable
     } # End of PrivateData hashtable
 
