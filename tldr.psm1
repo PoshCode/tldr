@@ -25,6 +25,14 @@ function Set-TldrConfiguration {
     #   Change options in the configuration files
     #.Description
     #   Imports your current configuration, changes the specified options, and stores them
+    #.Example
+    #   Set-TldrConfiguration -NameColors @{ Foreground = "Blue" }
+    #
+    #   Set the color used for printing section names to a blue foreground
+    #.Example
+    #   Set-TldrConfiguration -CodeColors @{ Foreground = "Blue"; Background = "Black" } -VariableColors @{ Foreground = "DarkGray"; Background = "Black"}
+    #
+    #   Set the colors used for printing code snippets
     param(
         # If set, local caching will be ignored,
         # results will always be fetched from the ${OnlineUrl}
@@ -53,14 +61,14 @@ function Set-TldrConfiguration {
             if($color -notin "Foreground","Background") {
                 throw "Invalid key '$Color' in ${key}: should be 'Foreground' or 'Background'"
             }
-            if(!($PSBoundParameters[$key][$color] -as [ConsoleColor])) {
-                throw "Invalid value for $key.$color, must be a ConsoleColor"
+            if(!($PSBoundParameters[$key][$color] -as [ConsoleColor] -is [ConsoleColor])) {
+                throw "Invalid value '$($PSBoundParameters[$key][$color])' for $key.$color, must be a ConsoleColor"
             }
             $Config.Colors[($key -replace "Colors$")] = $PSBoundParameters[$key]
         }
     }
 
-    $Config | Configuration\Export-Configuration
+    $Config | Configuration\Export-Configuration -Verbose
 
     # Update the script-scope variables without re-reading the config (again)
     [bool]$script:NoCache = $Config.NoCache
@@ -81,13 +89,12 @@ function Get-ShortHelp {
     param(
         # The name of a command to fetch some examples for
         [Alias("Command")]
-        [Parameter(Position=0, ParameterSetName="Text")]
+        [Parameter(Position=0, ParameterSetName="Text", ValueFromPipelineByPropertyName=$true)]
         [string]$Name = "*",
 
         # A Module name (to make the results more specific)
-        [Parameter(ParameterSetName="Text")]
+        [Parameter(ParameterSetName="Text", ValueFromPipelineByPropertyName=$true)]
         [string]$Module,
-
 
         # Show the web version of the file
         [Switch]$Online,
@@ -99,128 +106,131 @@ function Get-ShortHelp {
         # If set, generates a new tldr file from the help
         [switch]$Regenerate
     )
-    Write-Verbose "NoCache:$NoCache"
-    Write-Progress "Fetching Help for $Name" "Loading help cache"
+    process {
+        Write-Verbose "NoCache:$NoCache"
+        Write-Progress "Fetching Help for $Name" "Loading help cache"
 
-    # Cache initial data ... 
-    if(!$StoragePath) {
-        Write-Verbose "Load StoragePath"
-        $Script:StoragePath = GetStoragePath
-    }
-    if(!$HelpCache){
-        Write-Progress "Fetching Help for $Name" "No active cache - loading from ${PagesUrl}index.json"
-        Write-Verbose "Load online help index"
-        $Script:HelpCache = Invoke-RestMethod ${PagesUrl}index.json
-    }
-
-    $null = $PSBoundParameters.Remove("Regenerate")
-    $null = $PSBoundParameters.Remove("NoCache")
-    $null = $PSBoundParameters.Remove("Online")
-    Write-Progress "Fetching Help for $Name" "Testing if command exists locally"
-    $Command = Resolve-Command @PSBoundParameters
-
-    # Find the command if it's available on the local system
-    $FullName = $Name    
-
-    if($Command) {
-        $Name = $Command.Name
-        $Module = $Command.ModuleName
-    } else {
-        Write-Verbose "Command Not Found (checking online index anyway)"
-        # If we didn't find the command, we can still show help
-        # We support two syntaxes, because Get-Command does:
-        # Get-ShortHelp Get-Service -Module Microsoft.PowerShell.Management
-        # Get-ShortHelp Microsoft.PowerShell.Management\Get-Service
-        $Module, $Name = $Name -split "[\\/](?=[^\\/]+$)",2
-        if(!$Name) {
-            $Name = $Module
-            $Module = $Null
+        # Cache initial data ... 
+        if(!$StoragePath) {
+            Write-Verbose "Load StoragePath"
+            $Script:StoragePath = GetStoragePath
         }
-    }
+        if(!$HelpCache){
+            Write-Progress "Fetching Help for $Name" "No active cache - loading from ${PagesUrl}index.json"
+            Write-Verbose "Load online help index"
+            $Script:HelpCache = Invoke-RestMethod ${PagesUrl}index.json
+        }
 
-    # TODO: if the online version is (newer?), fetch that one
-    $Best = $HelpCache | Where { $_.Name -eq $Name -and ($Module -eq $Null -or $Module -eq $_.Module)}
-    if($Best) {
-        Write-Verbose "Found online help for $($Best.Module)/$($Best.Name) last updated $($Best.Updated)"
-    }
+        $null = $PSBoundParameters.Remove("Regenerate")
+        $null = $PSBoundParameters.Remove("NoCache")
+        $null = $PSBoundParameters.Remove("Online")
+        Write-Progress "Fetching Help for $Name" "Testing if command exists locally"
+        $Command = Resolve-Command @PSBoundParameters
 
-    if($Online) {
-        if($Best) {
-            Write-Progress "Fetching Help for $Name" "Loading online version of help into browser"
-            foreach($page in $Best) {
-                Start-Process "${OnlineUrl}$($page.Module)/$($page.Name).md"
-            }
-            return
+        # Find the command if it's available on the local system
+        $FullName = $Name    
+
+        if($Command) {
+            $Name = $Command.Name
+            $Module = $Command.ModuleName
         } else {
-            Write-Error "There's no online documentation for $Module\$Name"
-            return
+            Write-Verbose "Command Not Found (checking online index anyway)"
+            # If we didn't find the command, we can still show help
+            # We support two syntaxes, because Get-Command does:
+            # Get-ShortHelp Get-Service -Module Microsoft.PowerShell.Management
+            # Get-ShortHelp Microsoft.PowerShell.Management\Get-Service
+            $Module, $Name = $Name -split "[\\/](?=[^\\/]+$)",2
+            if(!$Name) {
+                $Name = $Module
+                $Module = $Null
+            }
         }
-    }
 
-    # Use syntax from the actual command, if available
-    if($Command) {
-        Write-Verbose "Loading syntax from PowerShell"
-        $Syntax = Get-Command $Command -Syntax
-    }
+        # TODO: if the online version is (newer?), fetch that one
+        $Best = $HelpCache | Where { $_.Name -eq $Name -and ($Module -eq $Null -or $Module -eq $_.Module)}
+        if($Best) {
+            Write-Verbose "Found online help for $($Best.Module)/$($Best.Name) last updated $($Best.Updated)"
+        }
 
-    if(!$NoCache -and ($HelpFile = Find-TldrDocument $Name $Module)) {
-        # If they did not Module-qualify the name, and the command doesn't exist locally
-        # It's possible that we have multiple matches online or locally or both
-        foreach($filePath in @($HelpFile)) {
-            Write-Verbose "Found $filePath for $Module\$Name"
-            # Write the output right now, before we try to update ...
-            Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
-
-            # If it's ok to cache the latest, we might want to update
+        if($Online) {
             if($Best) {
-                $FileInfo = Get-Item $FilePath
-                foreach($page in @($Best)) {
-                    if($page.Module -eq $Module -or $page.Module -eq $FileInfo.Directory.Name) {
-                        # FINALLY! If the online version is newer, update now
-                        if($FileInfo.LastWriteTime -lt $Best.Updated) {
-                            $Url ="${PagesUrl}$($Best.Module)/($Best.Name).md"
-                            Write-Warning "Newer help content found online, updating $filePath with $Url"
-                            Invoke-WebRequest $Url -OutFile $filePath -ErrorAction Stop
+                Write-Progress "Fetching Help for $Name" "Loading online version of help into browser"
+                foreach($page in $Best) {
+                    Start-Process "${OnlineUrl}$($page.Module)/$($page.Name).md"
+                }
+                return
+            } else {
+                Write-Error "There's no online documentation for $Module\$Name"
+                return
+            }
+        }
+
+        # Use syntax from the actual command, if available
+        if($Command) {
+            Write-Verbose "Loading syntax from PowerShell"
+            $Syntax = Get-Command $Command -Syntax
+        }
+
+        if(!$Regenerate -and (!$NoCache -and ($HelpFile = Find-TldrDocument $Name $Module))) {
+            # If they did not Module-qualify the name, and the command doesn't exist locally
+            # It's possible that we have multiple matches online or locally or both
+            foreach($filePath in @($HelpFile)) {
+                Write-Verbose "Found $filePath for $Module\$Name"
+                # Write the output right now, before we try to update ...
+                Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
+
+                # If it's ok to cache the latest, we might want to update
+                if($Best) {
+                    $FileInfo = Get-Item $FilePath
+                    foreach($page in @($Best)) {
+                        if($page.Module -eq $Module -or $page.Module -eq $FileInfo.Directory.Name) {
+                            # FINALLY! If the online version is newer, update now
+                            if($FileInfo.LastWriteTime -lt $Best.Updated) {
+                                $Url ="${PagesUrl}$($Best.Module)/($Best.Name).md"
+                                Write-Warning "Newer help content found online, updating $filePath with $Url"
+                                Invoke-WebRequest $Url -OutFile $filePath -ErrorAction Stop
+                            }
                         }
                     }
                 }
             }
+            return
         }
-        return
-    }
 
-    # If we don't have a local copy (or we're ignoring it) but there is one online...
-    if(($NoCache -or !$HelpFile) -and $Best) {
-        Write-Progress "Fetching Help for $Name" "Loading latest help file from remote server"
+        # If we don't have a local copy (or we're ignoring it) but there is one online...
+        if(!$Regenerate -and (($NoCache -or !$HelpFile) -and $Best)) {
+            Write-Progress "Fetching Help for $Name" "Loading latest help file from remote server"
 
-        foreach($page in @($Best)) {
-            if($NoCache) {
-                $HelpFile = [IO.Path]::GetTempFileName()
-            } else {
-                $null = mkdir (join-Path $Script:StoragePath $Page.Module) -force
-                $HelpFile = Join-Path ${Script:StoragePath} "$($Page.Module)\$($Page.Name).md"
+            foreach($page in @($Best)) {
+                if($NoCache) {
+                    $HelpFile = [IO.Path]::GetTempFileName()
+                } else {
+                    $null = mkdir (join-Path $Script:StoragePath $Page.Module) -force
+                    $HelpFile = Join-Path ${Script:StoragePath} "$($Page.Module)\$($Page.Name).md"
+                }
+                $Url = "${PagesUrl}$($Page.Module)/$($Page.Name).md"
+                Write-Verbose "NoCache:$NoCache - Downloading $Url for to $HelpFile"
+                Invoke-WebRequest $Url -OutFile "$HelpFile" -ErrorAction Stop
+                Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
+                if($NoCache) {
+                    Remove-Item $HelpFile
+                }
             }
-            $Url = "${PagesUrl}$($Page.Module)/$($Page.Name).md"
-            Write-Verbose "NoCache:$NoCache - Downloading $Url for to $HelpFile"
-            Invoke-WebRequest $Url -OutFile "$HelpFile" -ErrorAction Stop
+            return
+        }
+
+        # Asked to regenerate or there's no HelpFile
+        $Help = Get-Help $Command
+        Write-Verbose "Regenerate:$Regenerate Help:$([bool]$Help) HelpFile:$([bool]$HelpFile)"
+        if($Help -and ($Regenerate -or !$HelpFile)) {
+            Write-Warning "tldr page not found for $Name. Generating from built-in help."
+            $HelpFile = New-TldrDocument $Command
             Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
-            if($NoCache) {
-                Remove-Item $HelpFile
-            }
+            return
         }
-        return
-    }
 
-    # Asked to regenerate or there's no HelpFile
-    if(($Help = Get-Help $Command) -and ($Regenerate -or !$HelpFile)) {
-        Write-Warning "tldr page not found for $Name. Generating from built-in help."
-        $HelpFile = New-TldrDocument $Command
-        Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
-        return
-    }
-
-    Write-Error "Cannot find help for $Name!"
-    
+        Write-Error "Cannot find help for $Name!"
+    }    
 }
 
 function Resolve-Command {
@@ -311,7 +321,7 @@ function New-TldrDocument {
 
                 # We really aren't interested in those long-winded explanations, but keep the first paragraph
 
-                $intro = if([string]::IsNullOrWhiteSpace($example.introduction.Text)) { 
+                $intro = if([string]::IsNullOrWhiteSpace($example.introduction.Text) -or $example.introduction.Text.Trim() -eq 'PS C:\>') { 
                     @($example.remarks[0].Text -split '(?<=\.) ')[0]
                 } else {
                     $example.introduction.Text
@@ -365,7 +375,7 @@ function Write-Help {
         $Name = [regex]::Match($command,'^#\s+(.*)(?m:$)').Groups[1].Value
     
         if(!$CommandName -or $CommandName -eq $Name) {
-            Write-Host $Name @NameColors
+            Write-Host "`n$Name" @NameColors
             # split each section on the headline: '## whatever'
             foreach($helpBlock in $command -split '(?m)^(?=##\s+.*$)') {
                 $global:match = [regex]::Match($helpBlock,'(?m)^##\s+(?<name>.*?)$').Groups['name'].Value
@@ -416,14 +426,12 @@ filter Write-Code {
 
     $Code = $Code -replace '(?m)^( {4})?PS C:\\>(.*)', '$1$2'
     $Code = $Code -replace '(?m)^(\S+.*)', '    $1'
+
     switch -regex ($Code -split $VariablePattern) {
         $VariablePattern { Write-Host $_ @VariableColors -NoNewLine}
         default { Write-Host $_ @CodeColors -NoNewLine}
     }
     Write-Host "`n"
 }
-
-
-
 
 Set-Alias tldr Get-ShortHelp
