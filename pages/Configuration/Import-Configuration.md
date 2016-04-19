@@ -21,8 +21,6 @@ Load configuration data for a specified module
 ${Configuration} = Get-Module ${ModuleName} | Import-Configuration
 ```
 
-
-
 ## Syntax
 
 ```powershell

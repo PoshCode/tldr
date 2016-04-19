@@ -1,3 +1,4 @@
+push-location $PSScriptRoot
 &{
     Get-ChildItem (Join-Path $PSScriptRoot pages) -File -Recurse -Filter *.md |
         Select-Object @{name="Name"; expr={$_.BaseName}}, 
@@ -8,3 +9,5 @@
                         ("{0:o}" -f $last.UtcDateTime) -replace "\.0000000"
                        }}
 } | ConvertTo-Json -Compress | Set-Content (Join-Path (Join-Path $PSScriptRoot pages) index.json)
+
+pop-location

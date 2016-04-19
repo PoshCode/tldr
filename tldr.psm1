@@ -1,6 +1,6 @@
 #requires -Module @{ModuleName="Configuration"; ModuleVersion="0.3"}
 
-$PagesUrl = "https://raw.github.com/PoshCode/tldr/master/pages/"
+$PagesUrl = "https://github.com/PoshCode/tldr/raw/master/pages/"
 $OnlineUrl = "https://github.com/PoshCode/tldr/blob/master/pages/"
 
 function GetStoragePath {
@@ -99,6 +99,7 @@ function Get-ShortHelp {
         # If set, generates a new tldr file from the help
         [switch]$Regenerate
     )
+    Write-Verbose "NoCache:$NoCache"
     Write-Progress "Fetching Help for $Name" "Loading help cache"
 
     # Cache initial data ... 
@@ -156,19 +157,19 @@ function Get-ShortHelp {
         }
     }
 
-    # Use syntax from the actual command help, if available
+    # Use syntax from the actual command, if available
     if($Command) {
         Write-Verbose "Loading syntax from PowerShell"
-        $Help = Get-Help $Command
-        $Syntax = $Help.Syntax
+        $Syntax = Get-Command $Command -Syntax
     }
 
     if(!$NoCache -and ($HelpFile = Find-TldrDocument $Name $Module)) {
         # If they did not Module-qualify the name, and the command doesn't exist locally
         # It's possible that we have multiple matches online or locally or both
         foreach($filePath in @($HelpFile)) {
+            Write-Verbose "Found $filePath for $Module\$Name"
             # Write the output right now, before we try to update ...
-            Write-Help $HelpFile $Syntax
+            Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
 
             # If it's ok to cache the latest, we might want to update
             if($Best) {
@@ -177,8 +178,9 @@ function Get-ShortHelp {
                     if($page.Module -eq $Module -or $page.Module -eq $FileInfo.Directory.Name) {
                         # FINALLY! If the online version is newer, update now
                         if($FileInfo.LastWriteTime -lt $Best.Updated) {
-                            Write-Warning "Newer help content found online, updating"
-                            Invoke-WebRequest "${PagesUrl}$($Best.Module)/($Best.Name).md" -OutFile $filePath -ErrorAction Stop
+                            $Url ="${PagesUrl}$($Best.Module)/($Best.Name).md"
+                            Write-Warning "Newer help content found online, updating $filePath with $Url"
+                            Invoke-WebRequest $Url -OutFile $filePath -ErrorAction Stop
                         }
                     }
                 }
@@ -196,20 +198,24 @@ function Get-ShortHelp {
                 $HelpFile = [IO.Path]::GetTempFileName()
             } else {
                 $null = mkdir (join-Path $Script:StoragePath $Page.Module) -force
-                $HelpFile = Join-Path $Script:StoragePath $($Page.Module)\$($Page.Name).md
+                $HelpFile = Join-Path ${Script:StoragePath} "$($Page.Module)\$($Page.Name).md"
             }
-            Invoke-WebRequest "${PagesUrl}$($Page.Module)/$($Page.Name).md" -OutFile $HelpFile -ErrorAction Stop
-            Write-Help $HelpFile $Syntax
-            Remove-Item $HelpFile
+            $Url = "${PagesUrl}$($Page.Module)/$($Page.Name).md"
+            Write-Verbose "NoCache:$NoCache - Downloading $Url for to $HelpFile"
+            Invoke-WebRequest $Url -OutFile "$HelpFile" -ErrorAction Stop
+            Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
+            if($NoCache) {
+                Remove-Item $HelpFile
+            }
         }
         return
     }
 
     # Asked to regenerate or there's no HelpFile
-    if($Help -and ($Regenerate -or !$HelpFile)) {
+    if(($Help = Get-Help $Command) -and ($Regenerate -or !$HelpFile)) {
         Write-Warning "tldr page not found for $Name. Generating from built-in help."
         $HelpFile = New-TldrDocument $Command
-        Write-Help $HelpFile $Syntax
+        Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
         return
     }
 
@@ -291,11 +297,12 @@ function New-TldrDocument {
                                  "Generate the file '$($HelpFile)'?",
                                  "Generating Help Files")) {
             Write-Progress "Generating HelpFile:" "$HelpFile"
-            Write-Warning "Please consider editing the generated file to match the tldr contribution guidelines and submitting it for others to use.`nFILE PATH:`n$HelpFile`n    See also: Get-Help about_tldr`n`n"
+            Write-Warning "Please consider editing the generated file to match the tldr guidelines and sharing it for others to use.`nFILE PATH:`n$HelpFile`n    See also: Get-Help about_tldr`n`n"
 
 
-            "# $Name`n" | Out-File $HelpFile
-            "> $Synopsis`n" | Out-File $HelpFile -Append
+            "# $Name`n`n" | Out-File $HelpFile
+            "## Synopsis`n`n$Synopsis`n" | Out-File $HelpFile -Append
+            "## Examples`n" | Out-File $HelpFile -Append
 
             foreach($example in $Help.Examples.example) {
                 $code = $example.code -split "[\r\n]+"
@@ -303,14 +310,20 @@ function New-TldrDocument {
                 $code = @($code[0]) + @($code[1..1e3] -match $prefix) -replace $prefix
 
                 # We really aren't interested in those long-winded explanations, but keep the first paragraph
-                $remarks = $example.remarks[0].Text
-                "- $remarks`n" | Out-File $HelpFile -Append
-                "``$code```n" | Out-File $HelpFile -Append
+
+                $intro = if([string]::IsNullOrWhiteSpace($example.introduction.Text)) { 
+                    @($example.remarks[0].Text -split '(?<=\.) ')[0]
+                } else {
+                    $example.introduction.Text
+                }
+                "### EXAMPLE`n" | Out-File $HelpFile -Append
+                "$intro`n" | Out-File $HelpFile -Append
+                "``````powershell`n$code`n```````n" | Out-File $HelpFile -Append
             }
 
-            "`n## Full Syntax`n" | Out-File $HelpFile -Append
+            "`n## Syntax`n" | Out-File $HelpFile -Append
             foreach($syn in $syntax) {
-                "``$syn```n" | Out-File $HelpFile -Append
+                "``````powershell`n$syn`n```````n" | Out-File $HelpFile -Append
             }
         }
 
@@ -319,33 +332,40 @@ function New-TldrDocument {
 }
 
 function Write-Help {
+    #.Synopsis
     # Output Markdown-formatted tldr help files colorfully
+    #.Notes
+    # Changed in 1.1 to use the platyPS schema    
     [CmdletBinding()]
     param(
-        $HelpFile, 
-        <#[MamlCommandHelpInfo#syntax]#>
-        $Syntax,
-        $CommandName = $(if($Syntax) {
-            $Syntax.syntaxItem.name[0]
-        })
+        [Parameter()]
+        [Alias("Name")]
+        $CommandName,
+
+        [Parameter()]
+        [Alias("File","Path","PSPath")]
+        $HelpFile,
+
+        [Parameter()]
+        $Syntax = $(Get-Command $CommandName -Syntax)
     )
     ImportConfiguration
 
     # Syntax:
     # $Syntax| Out-String -stream -width 1e4 | Where-Object { $_ }
-    $CommandName = if($Syntax) {
-        $Syntax.syntaxItem.name[0]
-    }
+    Write-Debug "HelpFile: $HelpFile"
 
-    ## Changed in 1.1 to use the platyPS schema
     $help = Get-Content $HelpFile -Raw
+
+    ## indent all the code (we want to print it that way anyway)
+    $help = [regex]::replace($help,'(?s)\n```.*?\n```',{ $args[0] -replace '(?m)(^(?!```).*)','    $1' })
 
     # foreach command name (matches '# Command Name' without throwing it out
     foreach($command in $help -split '(?m)^(?=#\s+.*$)') {
         $Name = [regex]::Match($command,'^#\s+(.*)(?m:$)').Groups[1].Value
     
         if(!$CommandName -or $CommandName -eq $Name) {
-            Write-Host $Name.Split(@("`r","`n")).where{$_}[0] @NameColors
+            Write-Host $Name @NameColors
             # split each section on the headline: '## whatever'
             foreach($helpBlock in $command -split '(?m)^(?=##\s+.*$)') {
                 $global:match = [regex]::Match($helpBlock,'(?m)^##\s+(?<name>.*?)$').Groups['name'].Value
@@ -355,7 +375,7 @@ function Write-Help {
                         Write-Host "  " ($helpBlock -replace "^(.*?)(?m:$)").Split(("`r","`n")).where{$_}[0] @SynopsisColors
                     }
                     "Examples" {
-                        Write-Host "EXAMPLES:" @NameColors
+                        Write-Host "`nExamples:".ToUpper() @NameColors
                         # We throw out the "EXAMPLE" junk header
                         foreach($example in $helpBlock -split '(?m)^###\s+.*$') {
                             if($example -match '(?s)(?<intro>.*)```(?:powershell)?(?<code>.*)```(?<remarks>.*)') {
@@ -365,12 +385,12 @@ function Write-Help {
                                     $matches['remarks']
                                 }
 
-                                Write-Host ($intro -split "\n").where{$_}[0] @DescriptionColors
-                                $matches['code'] | Write-Code -VariablePattern "(?=\<.*?\>)|(?<=\<.*?\>)"
+                                Write-Host ($intro -split "\n").where{![string]::IsNullOrWhiteSpace($_)}[0] @DescriptionColors
+                                $matches['code'] | Write-Code
                             }
                         }
                     }
-                    default { 
+                    default {
                         Write-Debug "$($helpBlock.Split(@("`r","`n")).where{$_}[0]) not wanted"
                     }
                 }
@@ -379,7 +399,7 @@ function Write-Help {
     }
 
     if($Syntax) {
-        Write-Host "Full Syntax:" @NameColors
+        Write-Host "Syntax:".ToUpper() @NameColors
         $Syntax | Out-String -stream -width 1e4 | Where-Object { $_ } | Write-Code -VariablePattern "(?=\<.*?\>)|(?<=\<.*?\>)"
     }
 }
@@ -392,12 +412,13 @@ filter Write-Code {
 
         $VariablePattern = "(?=\$\{.*?\})|(?<=\$\{.*?\})|(?=\$\w+)|(?<=\$\w+)"
     )
-    $Code = ($Code -split "[\r\n]+").where{$_} -join "`n"
-    $Code = $Code -replace '(?m)^PS C:\\>(.*)', '$1'
-    $Code = $Code -replace '(?m)^(.*)', '    $1'
+    $Code = ($Code -split "[\r\n]+").where{![string]::IsNullOrWhiteSpace($_)} -join "`n"
+
+    $Code = $Code -replace '(?m)^( {4})?PS C:\\>(.*)', '$1$2'
+    $Code = $Code -replace '(?m)^(\S+.*)', '    $1'
     switch -regex ($Code -split $VariablePattern) {
         $VariablePattern { Write-Host $_ @VariableColors -NoNewLine}
-        default { Write-Host $_ @CodeColors  -NoNewLine}
+        default { Write-Host $_ @CodeColors -NoNewLine}
     }
     Write-Host "`n"
 }

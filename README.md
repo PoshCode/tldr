@@ -27,12 +27,12 @@ Or maybe you're just frustrated that in 74 lines of the `Get-Help Set-Acl -Examp
 
 This module and repository is an ever-growing collection of high-quality real-world examples for the most common PowerShell commands, and some code to generate starter files from the help documentation already available with your commands.
 
-* Just found a new module and want a quick overview? 
-* A little rusty on a command?
+### `tldr` is for you if you ever
+
+* Find a new module and want a quick overview? 
+* Need a reminder about a command's syntax?
 * Can't remember how to pass that one parameter?
 * Can't remember the syntax for commands you only use once in a blue moon?
-
-### `tldr` is for you.
 
 ## Antecedents
 

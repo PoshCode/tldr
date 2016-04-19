@@ -1,3 +1,29 @@
+The PoshCode *tldr* module is a collection of simplified and community-driven example pages to help you quickly the the gist of commands.
+
+It's a help module for people like me: When I look at command help, I usually only care about two things.
+
+1. The syntax
+2. Some examples
+
+I'm always frustrated when a command has a lot of description text, causing the syntax block to scroll right off the top of the page in PowerShell, or when there are pages and pages of examples that repeat the same refrain, and don't exercise the use case I need.
+
+You are like me if you would prefer simple syntax blocks and "show me common usage" in your help. Something like this:
+
+![tldr screenshot](http://raw.github.com/poshcode/tldr/gh-pages/images/screenshot.png)
+
+Or maybe you're just frustrated that in 74 lines of the `Get-Help Set-Acl -Examples` there's not a single example that doesn't just copy the ACL from one file to another.
+
+This module and repository is an ever-growing collection of high-quality real-world examples for the most common PowerShell commands, and some code to generate starter files from the help documentation already available with your commands.
+
+* Just found a new module and want a quick overview? 
+* A little rusty on a command?
+* Can't remember how to pass that one parameter?
+* Can't remember the syntax for commands you only use once in a blue moon?
+
+### `tldr` is for you.
+
+
+
 # tldr
 
 The PoshCode *tldr* module is a collection of simplified and community-driven example pages to help you quickly the the gist of commands.
