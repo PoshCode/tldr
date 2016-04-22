@@ -85,6 +85,9 @@ function Get-ShortHelp {
     #.Example
     #   tldr tldr
     #   Invokes Get-ShortHelp via it's standard alias, on itself.
+    #.Example
+    #   Get-Command -Module tldr | Get-ShortHelp
+    #   Invokes Get-ShortHelp for each of the commands in the tldr module.
     [CmdletBinding(DefaultParameterSetName="Text")]
     param(
         # The name of a command to fetch some examples for
@@ -106,6 +109,9 @@ function Get-ShortHelp {
         # If set, generates a new tldr file from the help
         [switch]$Regenerate
     )
+    begin  {
+        $index = 0
+    }
     process {
         Write-Verbose "NoCache:$NoCache"
         Write-Progress "Fetching Help for $Name" "Loading help cache"
@@ -170,6 +176,9 @@ function Get-ShortHelp {
             Write-Verbose "Loading syntax from PowerShell"
             $Syntax = Get-Command $Command -Syntax
         }
+        if(($index++) -and !$passthru) {
+            Write-Host "- - - -"
+        }
 
         if(!$Regenerate -and (!$NoCache -and ($HelpFile = Find-TldrDocument $Name $Module))) {
             # If they did not Module-qualify the name, and the command doesn't exist locally
@@ -219,12 +228,12 @@ function Get-ShortHelp {
             return
         }
 
-        # Asked to regenerate or there's no HelpFile
-        $Help = Get-Help $Command
-        Write-Verbose "Regenerate:$Regenerate Help:$([bool]$Help) HelpFile:$([bool]$HelpFile)"
-        if($Help -and ($Regenerate -or !$HelpFile)) {
-            Write-Warning "tldr page not found for $Name. Generating from built-in help."
+        # Found the real help, and they asked to regenerate or there's no HelpFile
+        if(($Help = Get-Help $Command) -and ($Regenerate -or !$HelpFile)) {
             $HelpFile = New-TldrDocument $Command
+            Write-Warning "Generated tldr page for $Name from built-in help:"
+            Write-Warning "$HelpFile"
+
             Write-Help -Name $Name -Path $HelpFile -Syntax $Syntax
             return
         }
@@ -276,14 +285,26 @@ function New-TldrDocument {
     #.Synopsis
     #   Generates a new tldr help document from the command's built-in help. Called automatically by tldr when custom-written help doesn't already exist.
     #.Description
-    #   Generates a new tldr help document from the command's built-in help, using just the synopsys, and snippets from the examples. 
+    #   Generates a new tldr help document from the command's built-in help, using just the synopsys and snippets from the examples. 
     #
     #   Note that only the lines which appear to be commands, plus the first line of commentary are actually pulled from the examples. Depending on how well the help was written, examples may need a lot of editing to make them useful with that little commentary.
+    #.Example 
+    #   Get-Command Get-ShortHelp | New-TldrDocument
+    #
+    #   Regenerates the short tldr help file for the Get-ShortHelp command
+    #.Example 
+    #   Get-Command -Module Configuration | New-TldrDocument .\pages
+    #
+    #   Regenerates the short tldr help files for all the commands in the Configuration module into the .\pages\Configuration folder, organized such that you can edit them and upload them to the tldr project.
+
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
         # The command we're generating help for
         [Parameter(ValueFromPipeline,ValueFromPipelineByPropertyName)]
-        [System.Management.Automation.CommandInfo]$CommandInfo
+        [System.Management.Automation.CommandInfo]$CommandInfo,
+
+        # The folder to generate tldr help files into (will be grouped into subfolders by module)
+        $StoragePath
     )
     begin {
         if(!$StoragePath) { $Script:StoragePath = GetStoragePath }
@@ -299,21 +320,23 @@ function New-TldrDocument {
         $Synopsis = $Help.Synopsis
         $Syntax = $Help.Syntax | Out-String -stream -width 1e4 | Where-Object { $_ }
 
-        $local:StoragePath = Join-Path $StoragePath $Module
-        $null = mkdir $StoragePath -force
-        $HelpFile = Join-Path $StoragePath "${Name}.md"
+        $local:ModulePath = Join-Path $StoragePath $Module
+        $HelpFile = Join-Path $ModulePath "${Name}.md"
 
         if($PSCmdlet.ShouldProcess("Generated the file '$($HelpFile)'",
-                                 "Generate the file '$($HelpFile)'?",
-                                 "Generating Help Files")) {
+                                   "Generate the file '$($HelpFile)'?",
+                                   "Generating Help Files")) {
             Write-Progress "Generating HelpFile:" "$HelpFile"
-            Write-Warning "Please consider editing the generated file to match the tldr guidelines and sharing it for others to use.`nFILE PATH:`n$HelpFile`n    See also: Get-Help about_tldr`n`n"
-
+            $null = mkdir $ModulePath -force
 
             "# $Name`n`n" | Out-File $HelpFile
             "## Synopsis`n`n$Synopsis`n" | Out-File $HelpFile -Append
             "## Examples`n" | Out-File $HelpFile -Append
 
+            $index = 1
+            if($Help.Examples.example.Count -eq 0) {
+                Write-Warning "No examples in help for $Name"
+            }
             foreach($example in $Help.Examples.example) {
                 $code = $example.code -split "[\r\n]+"
                 # We always want the first line, *maybe* other lines with the prompt prefix
@@ -326,7 +349,7 @@ function New-TldrDocument {
                 } else {
                     $example.introduction.Text
                 }
-                "### EXAMPLE`n" | Out-File $HelpFile -Append
+                "### EXAMPLE {0}`n" -f $index++ | Out-File $HelpFile -Append
                 "$intro`n" | Out-File $HelpFile -Append
                 "``````powershell`n$code`n```````n" | Out-File $HelpFile -Append
             }
@@ -337,15 +360,18 @@ function New-TldrDocument {
             }
         }
 
-        Convert-Path $HelpFile
+        Get-Item $HelpFile
+    }
+    end {
+        Write-Warning "Please consider editing the generated file(s) to match the tldr guidelines and sharing it for others to use.`nSee also: Get-Help about_tldr`n`n"
     }
 }
 
 function Write-Help {
     #.Synopsis
-    # Output Markdown-formatted tldr help files colorfully
+    #   Output Markdown-formatted tldr help files to the host, colorfully
     #.Notes
-    # Changed in 1.1 to use the platyPS schema    
+    #   Changed in 2.0 to use the platyPS schema    
     [CmdletBinding()]
     param(
         [Parameter()]
